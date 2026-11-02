@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow, noarchive">
+<title>Mixed depth vs halo: estimated step time</title>
+<style>
+.viz-root {
+  color-scheme: light;
+  --page: #f9f9f7; --surface-1: #fcfcfb;
+  --text-primary: #0b0b0b; --text-secondary: #52514e; --muted: #898781;
+  --grid: #e1e0d9; --axis: #c3c2b7; --border: rgba(11,11,11,0.10);
+  --s1: #2a78d6; --s2: #eb6834; --s3: #1baf7a; --s4: #eda100; --other: #c3c2b7;
+  --q1: #86b6ef; --q2: #5598e7; --q3: #256abf; --q4: #104281;
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) .viz-root {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface-1: #1a1a19;
+    --text-primary: #f0efec; --text-secondary: #c3c2b7; --muted: #898781;
+    --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
+    --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --other: #52514e;
+    --q1: #184f95; --q2: #256abf; --q3: #5598e7; --q4: #9ec5f4;
+  }
+}
+:root[data-theme="dark"] .viz-root {
+  color-scheme: dark;
+  --page: #0d0d0d; --surface-1: #1a1a19;
+  --text-primary: #f0efec; --text-secondary: #c3c2b7; --muted: #898781;
+  --grid: #2c2c2a; --axis: #383835; --border: rgba(255,255,255,0.10);
+  --s1: #3987e5; --s2: #d95926; --s3: #199e70; --s4: #c98500; --other: #52514e;
+  --q1: #184f95; --q2: #256abf; --q3: #5598e7; --q4: #9ec5f4;
+}
+html, body { margin: 0; }
+body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+.viz-root { background: var(--page); color: var(--text-primary); min-height: 100vh; }
+main { max-width: 980px; margin: 0 auto; padding: 32px 20px 64px; }
+h1 { font-size: 26px; line-height: 1.25; margin: 0 0 8px; font-weight: 650; }
+h2 { font-size: 18px; margin: 0 0 4px; font-weight: 600; }
+p, li { color: var(--text-secondary); line-height: 1.5; font-size: 15px; }
+.sub { margin: 0 0 24px; }
+.card { background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px; padding: 20px; margin: 0 0 20px; }
+.card > p.lede { margin: 0 0 14px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(200px, 100%), 1fr)); gap: 12px; margin: 0 0 20px; }
+.tile { background: var(--surface-1); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+.tile .label { font-size: 13px; color: var(--text-secondary); }
+.tile .value { font-size: 34px; font-weight: 600; margin: 4px 0 2px; }
+.tile .note { font-size: 12px; color: var(--muted); }
+.controls { display: flex; gap: 8px; align-items: center; margin: 0 0 12px; flex-wrap: wrap; }
+.seg { display: inline-flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.seg button { font: inherit; font-size: 13px; padding: 6px 12px; border: 0; background: transparent; color: var(--text-secondary); cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--grid); color: var(--text-primary); font-weight: 600; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--text-secondary); margin: 0 0 8px; }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+svg text { font-family: inherit; }
+.axis text { fill: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+.cat { fill: var(--text-primary); font-size: 13px; }
+.cat2 { fill: var(--muted); font-size: 11.5px; }
+.vlabel { fill: var(--text-secondary); font-size: 12.5px; font-variant-numeric: tabular-nums; paint-order: stroke; stroke: var(--surface-1); stroke-width: 5px; stroke-linejoin: round; }
+.mark { cursor: default; }
+.mark:hover, .mark:focus { opacity: 0.8; outline: none; }
+#tip { position: fixed; pointer-events: none; background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px;
+  padding: 8px 10px; font-size: 13px; box-shadow: 0 4px 16px rgba(0,0,0,0.12); display: none; z-index: 10; max-width: 280px; }
+#tip b { color: var(--text-primary); font-size: 15px; }
+#tip .k { color: var(--text-secondary); display: flex; align-items: center; gap: 6px; }
+#tip .k i { width: 12px; height: 2px; display: inline-block; }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+.tw { overflow-x: auto; }
+svg { display: block; max-width: 100%; }
+th, td { text-align: right; padding: 6px 8px; border-bottom: 1px solid var(--grid); font-variant-numeric: tabular-nums; }
+th:first-child, td:first-child { text-align: left; }
+th { color: var(--text-secondary); font-weight: 600; }
+td { color: var(--text-primary); }
+tr.pick td { font-weight: 650; }
+details { margin-top: 10px; }
+summary { cursor: pointer; color: var(--text-secondary); font-size: 13px; }
+code { font-size: 13px; }
+.theme { float: right; margin: 0 0 8px 16px; }
+a { color: var(--s1); }
+</style>
+</head>
+<body>
+<div class="viz-root">
+<main>
+<div class="theme seg" role="group" aria-label="Theme">
+  <button data-t="light">Light</button><button data-t="dark">Dark</button>
+</div>
+<h1>Mixed depth with one or two layers per cell size is an estimated 12–15% faster per training step than halo</h1>
+<p class="sub">FireNet-2Hz native-resolution stack. Model estimate from 80 production FDS decks and the measured H100 step profile; not yet benchmarked.
+The convolution schemes are illustrated in <a href="https://hongyang-stand.github.io/mixed-res-conv-viz/#I">the toy figures</a> (halo = C, mixed depth = I).</p>
+
+<div class="tiles" id="tiles"></div>
+
+<section class="card">
+  <h2>Where a training step's time goes, by design</h2>
+  <p class="lede">Estimated ms per H=2 training window (forward, backward, AdamW) on the median deck. Halo is the measured profile; mixed-depth rows rescale each category by its own work count. The line marks halo's total.</p>
+  <div class="controls">
+    <div class="seg" role="group" aria-label="Precision" id="prec">
+      <button data-p="bf16" aria-pressed="true">bf16 U-Net</button><button data-p="fp32" aria-pressed="false">fp32</button>
+    </div>
+  </div>
+  <div class="legend" id="leg1"></div>
+  <div id="c1"></div>
+  <details><summary>Table view</summary><div id="t1"></div></details>
+</section>
+
+<section class="card">
+  <h2>Mixed depth wins by running fewer layers per level, not fewer rows</h2>
+  <p class="lede">Native-stack work, in units of "halo's corners × one 32-channel layer", split by cell size. Halo runs 4 layers on every corner. Mixed depth runs each level's layers only on the cells at that level (native plus pooled finer cells), so its rows total 1.14× halo's: it saves time only when each level runs fewer layers. Native 1 m cells are ~42% of corners, so widening the coarse levels is expensive.</p>
+  <div class="legend" id="leg2"></div>
+  <div id="c2"></div>
+  <details><summary>Table view</summary><div id="t2"></div></details>
+</section>
+
+<section class="card">
+  <h2>Every cell still gets at least halo's depth</h2>
+  <p class="lede">Encoder convolutions a cell passes through before the 4 m pool, by its native size. A fine cell also runs every coarser level's layers, which is why M3 can cut each level to one encoder and one decoder layer.</p>
+  <div id="t3"></div>
+</section>
+
+<section class="card">
+  <h2>The estimate holds across decks</h2>
+  <p class="lede">M3 step time relative to halo (bf16) for each of the 80 decks, against the share of corners at 0.25 m.</p>
+  <div id="c4"></div>
+  <details><summary>Table view</summary><div id="t4"></div></details>
+</section>
+
+<section class="card">
+  <h2>Pre-build checks from the same decks</h2>
+  <p class="lede">Every FDS mesh is 16³ cells; pooling lines up (cell counts divisible, origins on the level lattice) in <span id="aligned"></span> decks. Pooled blocks re-tile into full 16³ tiles for most cells, which keeps the halo ring near halo's 0.40 slots per row.</p>
+  <div id="t5"></div>
+</section>
+
+<section class="card">
+  <h2>Design and method</h2>
+  <ul>
+    <li><b>Shared weights across cell sizes.</b> One set of native conv weights for 0.25, 0.5, 1 and 2 m, told the cell size by log2(dx) at the input (constant over a level, so a free per-level bias) and a per-level scale and shift (FiLM) after each LayerNorm. The dense 4 / 16 / 64 m levels keep their own weights.</li>
+    <li><b>Where the saving comes from.</b> Halo's per-layer gather averages fine corners into coarse ones at every size change (<span id="seam"></span> of its gather nonzeros); mixed depth never needs that. The 4 m pool reads the 2 m level (0.17 of the rows) instead of every corner. The rest is fewer layers per row.</li>
+    <li><b>Method.</b> Rows, halo slots and halo nonzeros counted from the <code>&amp;MESH</code> lines of 80 production decks. Each category of the measured H100 profile (median validation deck, 2.13 M corners) is scaled by its own count: convolutions by rows × input × output channels, LayerNorm / GELU / elementwise / copy by rows × channels (80% assumed native), cuSPARSE by nonzeros × channels. Wall time outside those categories is held fixed.</li>
+    <li><b>Not modelled.</b> Per-level kernel launch overhead; the 0.5 m level's small size (0.12 of the rows) may not fill the GPU; memory. The next step is a one-hour H100 benchmark of halo against M3 in bf16.</li>
+  </ul>
+</section>
+</main>
+<div id="tip" role="tooltip"></div>
+</div>
+<script>
+const D = {"configs": [{"name": "Halo today", "cfg": null, "bf16": {"parts": {"conv": 22.1, "norm": 32.6, "sp_halo": 11.154760069666622, "sp_pool": 4.545239930333378, "other": 12.799999999999997}, "ratio": 1.0, "p10": 1.0, "p90": 1.0}, "fp32": {"parts": {"conv": 61.9, "norm": 36.5, "sp_halo": 10.728463506494649, "sp_pool": 4.371536493505351, "other": 12.400000000000006}, "ratio": 1.0, "p10": 1.0, "p90": 1.0}, "depth": [2, 2, 2, 2], "work": {"all native": 4.0}}, {"name": "As first written", "cfg": {"0.25": [32, 2, 2], "0.5": [32, 2, 2], "1.0": [32, 2, 2], "2.0": [32, 2, 2]}, "bf16": {"parts": {"conv": 30.13519284420559, "norm": 37.71246922024095, "sp_halo": 10.000687243280911, "sp_pool": 0.7826312582511699, "other": 12.799999999999997}, "ratio": 1.098723604508761, "p10": 1.0940976408700316, "p90": 1.1015544803084663}, "fp32": {"parts": {"conv": 84.40581163150796, "norm": 42.22408363615935, "sp_halo": 9.618495374110939, "sp_pool": 0.7527217834135456, "other": 12.400000000000006}, "ratio": 1.186642036371182, "p10": 1.1793605508891254, "p90": 1.190899910474801}, "depth": [8, 6, 4, 2], "work": {"0.25": 1.6383322247921446, "0.5": 0.4734549472531303, "1.0": 1.7620144048645585, "2.0": 0.6792247159894407}}, {"name": "M3", "cfg": {"0.25": [32, 1, 1], "0.5": [32, 1, 1], "1.0": [32, 1, 1], "2.0": [32, 2, 2]}, "bf16": {"parts": {"conv": 21.120473091455544, "norm": 29.21495736784255, "sp_halo": 6.607611273397234, "sp_pool": 0.7826312582511699, "other": 12.799999999999997}, "ratio": 0.8476501915959296, "p10": 0.838460407721885, "p90": 0.858306460408864}, "fp32": {"parts": {"conv": 59.15643820638453, "norm": 32.70999827994641, "sp_halo": 6.355091097343838, "sp_pool": 0.7527217834135456, "other": 12.400000000000006}, "ratio": 0.8846667531074224, "p10": 0.8747141100386847, "p90": 0.8970939123327808}, "depth": [5, 4, 3, 2], "work": {"0.25": 0.8191661123960723, "0.5": 0.23672747362656515, "1.0": 0.8810072024322793, "2.0": 0.6792247159894407}}, {"name": "M3 + 2+2 at 0.5 m", "cfg": {"0.25": [32, 1, 1], "0.5": [32, 2, 2], "1.0": [32, 1, 1], "2.0": [32, 2, 2]}, "bf16": {"parts": {"conv": 22.33916444554728, "norm": 30.32336685336795, "sp_halo": 7.122360221917292, "sp_pool": 0.7826312582511699, "other": 12.799999999999997}, "ratio": 0.8826899945286554, "p10": 0.8715812408529228, "p90": 0.892123898595456}, "fp32": {"parts": {"conv": 62.56987688594464, "norm": 33.95100890024325, "sp_halo": 6.85016811152555, "sp_pool": 0.7527217834135456, "other": 12.400000000000006}, "ratio": 0.926145745632475, "p10": 0.9115641426466694, "p90": 0.9391151472015711}, "depth": [6, 5, 3, 2], "work": {"0.25": 0.8191661123960723, "0.5": 0.4734549472531303, "1.0": 0.8810072024322793, "2.0": 0.6792247159894407}}, {"name": "M3 + 48 ch at 2 m", "cfg": {"0.25": [32, 1, 1], "0.5": [32, 1, 1], "1.0": [32, 1, 1], "2.0": [48, 2, 2]}, "bf16": {"parts": {"conv": 26.16784797807174, "norm": 31.451065793933516, "sp_halo": 6.924580302679061, "sp_pool": 1.1620888380093126, "other": 12.799999999999997}, "ratio": 0.9440144103038327, "p10": 0.9106386913232483, "p90": 0.9866438150365906}, "fp32": {"parts": {"conv": 73.29365564898826, "norm": 35.21361660977219, "sp_halo": 6.65994666053846, "sp_pool": 1.1176777996140523, "other": 12.400000000000006}, "ratio": 1.02200419896602, "p10": 0.9785984328446188, "p90": 1.0815380140839175}, "depth": [5, 4, 3, 2], "work": {"0.25": 0.8191661123960723, "0.5": 0.23672747362656515, "1.0": 0.8810072024322793, "2.0": 1.018837073984161}}, {"name": "Widening", "cfg": {"0.25": [32, 1, 1], "0.5": [32, 2, 2], "1.0": [48, 2, 2], "2.0": [64, 2, 2]}, "bf16": {"parts": {"conv": 52.40356807525979, "norm": 44.75470771302273, "sp_halo": 10.36906675797779, "sp_pool": 1.5415464177674554, "other": 12.799999999999997}, "ratio": 1.4642987382804993, "p10": 1.2968812143702386, "p90": 1.6297994216630978}, "fp32": {"parts": {"conv": 146.7774146542344, "norm": 50.10879851304692, "sp_halo": 9.972796690793928, "sp_pool": 1.482633815814559, "other": 12.400000000000006}, "ratio": 1.7527159747156533, "p10": 1.5170857198298764, "p90": 1.979843390867959}, "depth": [7, 6, 4, 2], "work": {"0.25": 0.8191661123960723, "0.5": 0.4734549472531303, "1.0": 2.6430216072968378, "2.0": 1.3584494319788813}}], "decks": [{"N": 1734289, "f025": 0.31444759206798867, "r": 0.8499764580580006}, {"N": 2279632, "f025": 0.5064655172413793, "r": 0.8388010889273216}, {"N": 2181372, "f025": 0.6801801801801802, "r": 0.8410571657597713}, {"N": 1699269, "f025": 0.4047740528427224, "r": 0.8557041814035672}, {"N": 1542682, "f025": 0.43312101910828027, "r": 0.8559111974900311}, {"N": 1336336, "f025": 0.23529411764705882, "r": 0.8625050043301582}, {"N": 1395292, "f025": 0.30985915492957744, "r": 0.8596117189523991}, {"N": 1704811, "f025": 0.3227665706051873, "r": 0.8499913083153058}, {"N": 2097851, "f025": 0.5128805620608899, "r": 0.8425082331034662}, {"N": 1238076, "f025": 0.3055555555555556, "r": 0.8593852478118903}, {"N": 2132242, "f025": 0.4838709677419355, "r": 0.8385576531075083}, {"N": 1955374, "f025": 0.542713567839196, "r": 0.8489125246662163}, {"N": 2083061, "f025": 0.5165220797662671, "r": 0.8435682672323975}, {"N": 2350556, "f025": 0.484913356669656, "r": 0.8425198557297436}, {"N": 1690157, "f025": 0.44765190452721254, "r": 0.8486175006771579}, {"N": 2557021, "f025": 0.5725701900766557, "r": 0.8395837440337524}, {"N": 2745999, "f025": 0.5564251844228639, "r": 0.8429421132590602}, {"N": 2333562, "f025": 0.48423397364201165, "r": 0.8474814353461173}, {"N": 1659189, "f025": 0.3612523949953863, "r": 0.8628996640047482}, {"N": 1809163, "f025": 0.34759941475698986, "r": 0.8551574924228242}, {"N": 3001764, "f025": 0.5450225267542685, "r": 0.8395270907251241}, {"N": 1782303, "f025": 0.3638640567849574, "r": 0.8584723346485775}, {"N": 3825822, "f025": 0.6536417533277816, "r": 0.8363894995158295}, {"N": 2838598, "f025": 0.607505183897121, "r": 0.8440972740505285}, {"N": 1734431, "f025": 0.20678193597785094, "r": 0.8579628376947568}, {"N": 1624339, "f025": 0.22684612017565298, "r": 0.8582880299377847}, {"N": 2590891, "f025": 0.5480188089734381, "r": 0.8448878057683349}, {"N": 2266905, "f025": 0.23406538871280447, "r": 0.8537323906863875}, {"N": 2180970, "f025": 0.35141611301393416, "r": 0.8519480201005813}, {"N": 2184795, "f025": 0.4317549243750558, "r": 0.8513441057403291}, {"N": 1470030, "f025": 0.267368693155922, "r": 0.8648217830821224}, {"N": 2327034, "f025": 0.37580628387896353, "r": 0.8478189478457417}, {"N": 2026661, "f025": 0.3030230512157682, "r": 0.8515462038954611}, {"N": 1877061, "f025": 0.287912859518151, "r": 0.8571807478965916}, {"N": 2241337, "f025": 0.5436148156212118, "r": 0.8491122239010362}, {"N": 2314267, "f025": 0.38637114905064973, "r": 0.8499010323020177}, {"N": 2300361, "f025": 0.4591866233169489, "r": 0.8468926098167157}, {"N": 2062344, "f025": 0.4264211014263382, "r": 0.8520087895578128}, {"N": 2321271, "f025": 0.42753560441671823, "r": 0.8433059725870201}, {"N": 2191198, "f025": 0.5717488789237668, "r": 0.8446882960007139}, {"N": 1913679, "f025": 0.16430759808724452, "r": 0.8557943543331373}, {"N": 2076828, "f025": 0.17032513043930456, "r": 0.8567171011207092}, {"N": 2165313, "f025": 0.3993362622401473, "r": 0.851412861989042}, {"N": 2822074, "f025": 0.3551473136423779, "r": 0.8435085386721782}, {"N": 2909318, "f025": 0.3850263188829822, "r": 0.8426941436974422}, {"N": 2418426, "f025": 0.3372267747700364, "r": 0.8488985865316733}, {"N": 2463799, "f025": 0.3848564757108839, "r": 0.8487993596134147}, {"N": 2754465, "f025": 0.2300907798792143, "r": 0.8447854785120739}, {"N": 2176459, "f025": 0.3747178329571106, "r": 0.8380259893293128}, {"N": 1758854, "f025": 0.3547486033519553, "r": 0.8516357201592503}, {"N": 1616377, "f025": 0.2188449848024316, "r": 0.8539089580018823}, {"N": 2697237, "f025": 0.45901639344262296, "r": 0.8368985029005662}, {"N": 2382805, "f025": 0.4288659793814433, "r": 0.83739378367849}, {"N": 2142068, "f025": 0.27293577981651373, "r": 0.8438525715394186}, {"N": 1979939, "f025": 0.4143920595533499, "r": 0.8455095419774834}, {"N": 1498465, "f025": 0.3704918032786885, "r": 0.8578279054249539}, {"N": 2142068, "f025": 0.1651376146788991, "r": 0.8456498695258174}, {"N": 3030579, "f025": 0.44581414970538635, "r": 0.8395905322269703}, {"N": 2642282, "f025": 0.3049379286540952, "r": 0.843963255748492}, {"N": 2402174, "f025": 0.4949458282372551, "r": 0.8469635582512967}, {"N": 2032985, "f025": 0.2126646286126066, "r": 0.8576389374220393}, {"N": 2436735, "f025": 0.4717960713824031, "r": 0.8454731851549661}, {"N": 2140952, "f025": 0.40388014303917136, "r": 0.8500646016477864}, {"N": 1499916, "f025": 0.314449609178114, "r": 0.866198779839413}, {"N": 2317293, "f025": 0.4770329000260217, "r": 0.8444730277001823}, {"N": 3207073, "f025": 0.5760043503842912, "r": 0.8385086764321708}, {"N": 1754610, "f025": 0.26600498116390536, "r": 0.8541426507344334}, {"N": 1944432, "f025": 0.43206602236540026, "r": 0.856132957025955}, {"N": 2291521, "f025": 0.5145577980738557, "r": 0.8505333616999472}, {"N": 2499601, "f025": 0.5424817800921027, "r": 0.8474394047991609}, {"N": 2825695, "f025": 0.43467182409991173, "r": 0.8379459574399638}, {"N": 1987952, "f025": 0.26443847738778403, "r": 0.8472245739128604}, {"N": 2737737, "f025": 0.48093881917802916, "r": 0.8422640030229424}, {"N": 1934606, "f025": 0.44695819200395326, "r": 0.857518218851569}, {"N": 3768396, "f025": 0.6570838096633156, "r": 0.8362955736526749}, {"N": 3184718, "f025": 0.5522793540903779, "r": 0.8366812446961526}, {"N": 2825831, "f025": 0.37553838145310176, "r": 0.8446840840345198}, {"N": 3795987, "f025": 0.6134799724024345, "r": 0.8333095432518501}, {"N": 3868452, "f025": 0.44573643410852715, "r": 0.846636717954217}, {"N": 1758894, "f025": 0.3687066986413053, "r": 0.8619463735799117}], "levels": [{"level": "0.25", "rows": 0.40958305619803614, "slots": 0.3960920008141665, "full": 1.0, "full_min": 0.8848695652173914}, {"level": "0.5", "rows": 0.11836373681328258, "slots": 0.6038403620486366, "full": 0.9053650700617586, "full_min": 0.49403508771929827}, {"level": "1.0", "rows": 0.44050360121613963, "slots": 0.42394123967810254, "full": 0.8351602962395424, "full_min": 0.7545764815389389}, {"level": "2.0", "rows": 0.16980617899736017, "slots": 0.5754139527964828, "full": 0.7493870979545537, "full_min": 0.48815548221488814}], "halo": {"slots": 0.38460271132713564, "seam": 0.3301137922091266, "seam_lo": 0.26399624160912133, "seam_hi": 0.359551768110748}, "n_decks": 80, "aligned": 79, "native_share": {"0.25": 0.40958305619803614, "0.5": 0.05897153989999894, "1.0": 0.4224286122990609, "2.0": 0.10573476044533534}};
+const SVGNS = "http://www.w3.org/2000/svg";
+const css = v => getComputedStyle(document.querySelector(".viz-root")).getPropertyValue(v).trim();
+const el = (tag, attrs = {}, parent) => { const e = document.createElementNS(SVGNS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; };
+const h = (tag, text, parent) => { const e = document.createElement(tag); if (text != null) e.textContent = text; if (parent) parent.appendChild(e); return e; };
+const fx = x => "×" + x.toFixed(2);
+const tip = document.getElementById("tip");
+function showTip(ev, value, key, color) {
+  tip.replaceChildren(); h("b", value, tip);
+  const k = h("div", null, tip); k.className = "k"; const i = h("i", null, k); i.style.background = color; k.appendChild(document.createTextNode(key));
+  tip.style.display = "block";
+  const r = ev.target.getBoundingClientRect(), x = ev.clientX ?? r.left + r.width / 2, y = ev.clientY ?? r.top;
+  tip.style.left = Math.min(x + 12, innerWidth - 290) + "px"; tip.style.top = (y + 14) + "px";
+}
+const hideTip = () => tip.style.display = "none";
+function bindTip(node, value, key, color) {
+  node.setAttribute("tabindex", "0"); node.classList.add("mark");
+  node.setAttribute("aria-label", key + ": " + value);
+  node.addEventListener("pointermove", e => showTip(e, value, key, color));
+  node.addEventListener("focus", e => showTip(e, value, key, color));
+  node.addEventListener("pointerleave", hideTip); node.addEventListener("blur", hideTip);
+}
+function legend(id, items) {
+  const L = document.getElementById(id); L.replaceChildren();
+  for (const [name, col] of items) { const s = h("span", null, L); const i = h("i", null, s); i.style.background = col; s.appendChild(document.createTextNode(name)); }
+}
+function table(id, head, rows, pick) {
+  const T = document.getElementById(id); T.replaceChildren(); const w = h("div", null, T); w.className = "tw"; const t = h("table", null, w);
+  const tr = h("tr", null, h("thead", null, t)); head.forEach(x => h("th", x, tr));
+  const tb = h("tbody", null, t);
+  rows.forEach((r, i) => { const row = h("tr", null, tb); if (pick && pick(i)) row.className = "pick"; r.forEach(x => h("td", x, row)); });
+}
+// one bar end rounded 4px, square at the baseline
+function barPath(x0, x1, y, hgt, roundEnd) {
+  const r = Math.min(4, (x1 - x0) / 2, hgt / 2);
+  if (!roundEnd || x1 - x0 < 1) return `M${x0},${y}H${x1}V${y + hgt}H${x0}Z`;
+  return `M${x0},${y}H${x1 - r}Q${x1},${y} ${x1},${y + r}V${y + hgt - r}Q${x1},${y + hgt} ${x1 - r},${y + hgt}H${x0}Z`;
+}
+// stacked horizontal bars: rows [{label, sub, segs:[[key, value]]}], ref = vertical line value
+function stacked(id, rows, colors, opts) {
+  const host = document.getElementById(id); host.replaceChildren();
+  const W = host.clientWidth || 900, narrow = W < 600, LW = narrow ? 118 : 220, RW = narrow ? 76 : 90, BH = 22, GAP = 18, top = 8;
+  const H = top + rows.length * (BH + GAP) + 28;
+  const svg = el("svg", { width: W, height: H, viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": opts.aria }, host);
+  const xmax = opts.xmax, sx = v => LW + (W - LW - RW) * v / xmax;
+  const ax = el("g", { class: "axis" }, svg);
+  const step = narrow ? opts.tick * 2 : opts.tick;
+  for (let v = 0; v <= xmax + 1e-9; v += step) {
+    el("line", { x1: sx(v), x2: sx(v), y1: top - 4, y2: H - 24, stroke: css("--grid"), "stroke-width": 1 }, ax);
+    el("text", { x: sx(v), y: H - 8, "text-anchor": "middle" }, ax).textContent = opts.fmtTick(v);
+  }
+  if (opts.ref != null) {
+    el("line", { x1: sx(opts.ref), x2: sx(opts.ref), y1: top - 6, y2: H - 24, stroke: css("--text-secondary"), "stroke-width": 1.5 }, svg);
+  }
+  rows.forEach((r, i) => {
+    const y = top + i * (BH + GAP);
+    el("text", { x: 0, y: y + BH / 2 - (r.sub && !narrow ? 2 : -4), class: "cat" }, svg).textContent = r.label;
+    if (r.sub && !narrow) el("text", { x: 0, y: y + BH / 2 + 12, class: "cat2" }, svg).textContent = r.sub;
+    let acc = 0; const segs = r.segs.filter(s => s[1] > 0);
+    segs.forEach(([k, v], j) => {
+      const x0 = sx(acc) + (j ? 1 : 0), x1 = sx(acc + v) - (j < segs.length - 1 ? 1 : 0);
+      const p = el("path", { d: barPath(x0, Math.max(x1, x0 + 0.5), y, BH, j === segs.length - 1), fill: colors[k] }, svg);
+      bindTip(p, opts.fmtVal(v), r.label + " · " + k, colors[k]); acc += v;
+    });
+    el("text", { x: sx(acc) + 6, y: y + BH / 2 + 4, class: "vlabel" }, svg).textContent = narrow ? opts.endLabel(r, acc).split("  ").pop() : opts.endLabel(r, acc);
+  });
+}
+
+const CAT = ["Convolutions", "LayerNorm, GELU, elementwise, copy", "cuSPARSE: halo gathers", "cuSPARSE: 4 m pool", "Other (fixed)"];
+const PK = ["conv", "norm", "sp_halo", "sp_pool", "other"];
+const SUB = {
+  "Halo today": "2+2 layers on every native corner",
+  "As first written": "2+2 at every level",
+  "M3": "1+1 at 0.25–1 m, 2+2 at 2 m",
+  "M3 + 2+2 at 0.5 m": "as M3, 2+2 at 0.5 m",
+  "M3 + 48 ch at 2 m": "as M3, 48 channels at 2 m",
+  "Widening": "channels 32 / 32 / 48 / 64",
+};
+let prec = "bf16";
+function colorsCat() { return Object.fromEntries(CAT.map((c, i) => [c, css(["--s1", "--s2", "--s3", "--s4", "--other"][i])])); }
+
+function draw() {
+  const halo = D.configs[0];
+  // tiles
+  const T = document.getElementById("tiles"); T.replaceChildren();
+  const m3 = D.configs.find(c => c.name === "M3"), m0 = D.configs.find(c => c.name === "As first written");
+  [["M3 step time vs halo, bf16", fx(m3.bf16.ratio), `p10–p90 across decks ${fx(m3.bf16.p10)}–${fx(m3.bf16.p90)}`],
+   ["M3 step time vs halo, fp32", fx(m3.fp32.ratio), `p10–p90 ${fx(m3.fp32.p10)}–${fx(m3.fp32.p90)}`],
+   ["2+2 at every level (first plan), bf16", fx(m0.bf16.ratio), "slower: more layers on 1.14× the rows"]]
+    .forEach(([l, v, n]) => { const t = h("div", null, T); t.className = "tile"; h("div", l, t).className = "label"; h("div", v, t).className = "value"; h("div", n, t).className = "note"; });
+
+  // chart 1
+  const col = colorsCat();
+  legend("leg1", CAT.map(c => [c, col[c]]));
+  const rows = D.configs.map(c => ({ label: c.name, sub: SUB[c.name], segs: PK.map((k, i) => [CAT[i], c[prec].parts[k]]), ratio: c[prec].ratio }));
+  const xmax = prec === "bf16" ? 130 : 230;
+  stacked("c1", rows, col, { xmax, tick: prec === "bf16" ? 20 : 40, fmtTick: v => v + " ms", fmtVal: v => v.toFixed(1) + " ms",
+    endLabel: (r, acc) => `${acc.toFixed(0)} ms  ${fx(r.ratio)}`, ref: rows[0].segs.reduce((a, s) => a + s[1], 0),
+    aria: "Stacked bars of estimated ms per training window by category for six designs" });
+  table("t1", ["Design", ...CAT, "Total ms", "vs halo"], D.configs.map(c => [c.name, ...PK.map(k => c[prec].parts[k].toFixed(1)),
+    PK.reduce((a, k) => a + c[prec].parts[k], 0).toFixed(1), fx(c[prec].ratio)]), i => D.configs[i].name === "M3");
+
+  // chart 2: work by level
+  const LV = ["0.25", "0.5", "1.0", "2.0"], LN = ["0.25 m", "0.5 m", "1 m", "2 m"];
+  const qc = Object.fromEntries(LN.map((n, i) => [n, css(["--q1", "--q2", "--q3", "--q4"][i])]));
+  legend("leg2", LN.map(n => [n + " level", qc[n]]));
+  const wrows = D.configs.map(c => ({ label: c.name, sub: SUB[c.name],
+    segs: c.cfg ? LV.map((k, i) => [LN[i], c.work[k]]) : LV.map((k, i) => [LN[i], 4 * D.native_share[k]]) }));
+  stacked("c2", wrows, qc, { xmax: 7, tick: 1, fmtTick: v => v.toFixed(0), fmtVal: v => v.toFixed(2) + " (halo-corner layers)",
+    endLabel: (r, acc) => acc.toFixed(2), ref: 4, aria: "Stacked bars of native-stack work by cell-size level" });
+  table("t2", ["Design", ...LN.map(n => n + " level"), "Total"], wrows.map(r => [r.label, ...r.segs.map(s => s[1].toFixed(2)), r.segs.reduce((a, s) => a + s[1], 0).toFixed(2)]),
+    i => wrows[i].label === "M3");
+
+  // depth table
+  table("t3", ["Design", "0.25 m cells", "0.5 m cells", "1 m cells", "2 m cells"], D.configs.map(c => [c.name, ...c.depth.map(String)]), i => D.configs[i].name === "M3");
+
+  // chart 4: per-deck scatter
+  const host = document.getElementById("c4"); host.replaceChildren();
+  const W = host.clientWidth || 900, H = 260, L = 56, R = 16, Tp = 12, B = 40;
+  const svg = el("svg", { width: W, height: H, viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "Scatter of M3 relative step time per deck against 0.25 m share" }, host);
+  const sx = v => L + (W - L - R) * v / 0.8, sy = v => Tp + (H - Tp - B) * (1.0 - v) / 0.25;
+  const ax = el("g", { class: "axis" }, svg);
+  for (const v of [0.75, 0.8, 0.85, 0.9, 0.95, 1.0]) { el("line", { x1: L, x2: W - R, y1: sy(v), y2: sy(v), stroke: css("--grid") }, ax); el("text", { x: L - 8, y: sy(v) + 4, "text-anchor": "end" }, ax).textContent = fx(v); }
+  for (const v of [0, 0.2, 0.4, 0.6, 0.8]) el("text", { x: sx(v), y: H - 18, "text-anchor": "middle" }, ax).textContent = Math.round(v * 100) + "%";
+  el("text", { x: (L + W - R) / 2, y: H - 2, "text-anchor": "middle" }, ax).textContent = "share of corners at 0.25 m";
+  el("line", { x1: L, x2: W - R, y1: sy(1), y2: sy(1), stroke: css("--text-secondary"), "stroke-width": 1.5 }, svg);
+  el("text", { x: W - R, y: sy(1) + 16, "text-anchor": "end", class: "vlabel" }, svg).textContent = "halo = ×1.00";
+  D.decks.forEach(d => {
+    const g = el("g", {}, svg);
+    el("circle", { cx: sx(d.f025), cy: sy(d.r), r: 12, fill: "transparent" }, g);
+    el("circle", { cx: sx(d.f025), cy: sy(d.r), r: 4.5, fill: css("--s1"), stroke: css("--surface-1"), "stroke-width": 2 }, g);
+    bindTip(g, fx(d.r), `${(d.N / 1e6).toFixed(2)} M corners, ${(d.f025 * 100).toFixed(0)}% at 0.25 m`, css("--s1"));
+  });
+  table("t4", ["Corners (M)", "0.25 m share", "M3 vs halo, bf16"], [...D.decks].sort((a, b) => a.f025 - b.f025).map(d => [(d.N / 1e6).toFixed(2), (d.f025 * 100).toFixed(0) + "%", fx(d.r)]));
+
+  table("t5", ["Level", "Rows (share of halo's corners)", "Halo slots per row, before re-tiling", "Cells in complete 16³ tiles, median", "min"],
+    D.levels.map(l => [l.level + " m", l.rows.toFixed(2), l.slots.toFixed(2), Math.round(l.full * 100) + "%", Math.round(l.full_min * 100) + "%"]));
+  document.getElementById("aligned").textContent = `${D.aligned} of ${D.n_decks}`;
+  document.getElementById("seam").textContent = `${Math.round(D.halo.seam * 100)}% (${Math.round(D.halo.seam_lo * 100)}–${Math.round(D.halo.seam_hi * 100)}%)`;
+}
+
+document.querySelectorAll("#prec button").forEach(b => b.addEventListener("click", () => {
+  prec = b.dataset.p; document.querySelectorAll("#prec button").forEach(x => x.setAttribute("aria-pressed", x === b)); draw();
+}));
+document.querySelectorAll(".theme button").forEach(b => b.addEventListener("click", () => { document.documentElement.dataset.theme = b.dataset.t; draw(); }));
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", draw);
+let rt; addEventListener("resize", () => { clearTimeout(rt); rt = setTimeout(draw, 120); });
+draw();
+</script>
+</body>
+</html>
