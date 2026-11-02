@@ -95,6 +95,10 @@ a { color: var(--s1); }
   <button data-t="light">Light</button><button data-t="dark">Dark</button>
 </div>
 <h1>Measured on an H100, mixed depth is 17–39% slower than halo; the cost model below predicted 18–20% faster</h1>
+<section class="card" style="border-color: var(--s1)">
+  <h2>Update: fused, mixed depth runs at halo's speed (0.86–1.09×)</h2>
+  <p class="lede">Folding every level transition into the per-layer sparse product removed the glue cost described below. Architecture and the new measurements: <a href="https://hongyang-stand.github.io/mixed-depth-conv/">mixed-depth-conv</a>.</p>
+</section>
 <section class="card" style="border-color: var(--s2)">
   <h2>Measured (2 Nov 2026): the estimate below did not hold</h2>
   <p class="lede">Native stack only, forward + backward, bf16, 32 channels, on one H100. Mixed depth's convolutions are cheaper as designed (6.9 vs 8.8 ms on a9dc), but the glue between levels (gathers, copies, pools and up-sampling) costs more than they save. The step is GPU-bound, so this is real work, not launch overhead.</p>
